@@ -1,0 +1,261 @@
+
+worker_processes __WORKER_PROCESSES__;
+daemon off;
+pid   __NGINX_PID_PATH__;
+
+events {
+  worker_connections  1024;
+}
+
+http {
+
+    map $request_uri $request_uri_path {
+        "~^(?P<path>[^?]*)(\?.*)?$"  $path;
+    }
+
+  log_format combined_no_query '$remote_addr - $remote_user [$time_local] '
+           '"$request_method $request_uri_path $server_protocol" $status $body_bytes_sent '
+           '"$http_referer" "$http_user_agent"';
+
+	#Set allowed CIDR blocks
+__CIDR_LIST__
+    types {
+        text/html                                        html htm shtml;
+        text/css                                         css;
+        text/xml                                         xml;
+        image/gif                                        gif;
+        image/jpeg                                       jpeg jpg;
+        application/javascript                           js;
+        application/atom+xml                             atom;
+        application/rss+xml                              rss;
+
+        text/mathml                                      mml;
+        text/plain                                       txt;
+        text/vnd.sun.j2me.app-descriptor                 jad;
+        text/vnd.wap.wml                                 wml;
+        text/x-component                                 htc;
+
+        image/png                                        png;
+        image/svg+xml                                    svg svgz;
+        image/tiff                                       tif tiff;
+        image/vnd.wap.wbmp                               wbmp;
+        image/webp                                       webp;
+        image/x-icon                                     ico;
+        image/x-jng                                      jng;
+        image/x-ms-bmp                                   bmp;
+
+        font/woff                                        woff;
+        font/woff2                                       woff2;
+
+        application/java-archive                         jar war ear;
+        application/json                                 json;
+        application/mac-binhex40                         hqx;
+        application/msword                               doc;
+        application/pdf                                  pdf;
+        application/postscript                           ps eps ai;
+        application/rtf                                  rtf;
+        application/vnd.apple.mpegurl                    m3u8;
+        application/vnd.google-earth.kml+xml             kml;
+        application/vnd.google-earth.kmz                 kmz;
+        application/vnd.ms-excel                         xls;
+        application/vnd.ms-fontobject                    eot;
+        application/vnd.ms-powerpoint                    ppt;
+        application/vnd.oasis.opendocument.graphics      odg;
+        application/vnd.oasis.opendocument.presentation  odp;
+        application/vnd.oasis.opendocument.spreadsheet   ods;
+        application/vnd.oasis.opendocument.text          odt;
+        application/vnd.openxmlformats-officedocument.presentationml.presentation
+                                                         pptx;
+        application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+                                                         xlsx;
+        application/vnd.openxmlformats-officedocument.wordprocessingml.document
+                                                         docx;
+        application/vnd.wap.wmlc                         wmlc;
+        application/x-7z-compressed                      7z;
+        application/x-cocoa                              cco;
+        application/x-java-archive-diff                  jardiff;
+        application/x-java-jnlp-file                     jnlp;
+        application/x-makeself                           run;
+        application/x-perl                               pl pm;
+        application/x-pilot                              prc pdb;
+        application/x-rar-compressed                     rar;
+        application/x-redhat-package-manager             rpm;
+        application/x-sea                                sea;
+        application/x-shockwave-flash                    swf;
+        application/x-stuffit                            sit;
+        application/x-tcl                                tcl tk;
+        application/x-x509-ca-cert                       der pem crt;
+        application/x-xpinstall                          xpi;
+        application/xhtml+xml                            xhtml;
+        application/xspf+xml                             xspf;
+        application/zip                                  zip;
+
+        application/octet-stream                         bin exe dll;
+        application/octet-stream                         deb;
+        application/octet-stream                         dmg;
+        application/octet-stream                         iso img;
+        application/octet-stream                         msi msp msm;
+
+        audio/midi                                       mid midi kar;
+        audio/mpeg                                       mp3;
+        audio/ogg                                        ogg;
+        audio/x-m4a                                      m4a;
+        audio/x-realaudio                                ra;
+
+        video/3gpp                                       3gpp 3gp;
+        video/mp2t                                       ts;
+        video/mp4                                        mp4;
+        video/mpeg                                       mpeg mpg;
+        video/quicktime                                  mov;
+        video/webm                                       webm;
+        video/x-flv                                      flv;
+        video/x-m4v                                      m4v;
+        video/x-mng                                      mng;
+        video/x-ms-asf                                   asx asf;
+        video/x-ms-wmv                                   wmv;
+        video/x-msvideo                                  avi;
+    }
+    default_type  application/octet-stream;
+    client_max_body_size __MAX_BODY_SIZE__;
+
+    access_log __NGINX_LOG_PER_RESTPP__ combined_no_query;
+    error_log  __NGINX_ERR_PER_RESTPP__;
+    fastcgi_temp_path  __TEMP_ROOT__;
+    fastcgi_buffers 256 8k;
+
+    ###### [BEGIN] customized headers ######
+    __HEADER_CONFIG__
+    ###### [END] customized headers ######
+
+
+    keepalive_timeout  900s;
+
+    upstream fastcgi_backend {
+      server unix:__FASTCGI_PASS__;
+      keepalive 128;
+    }
+
+    # Use upstream derivative for listing all gsql server
+    # that could be used in requesttoken proxy_pass
+   __ENABLE_RESTPP_AUTH__ upstream gsql_token_server {
+   __ENABLE_RESTPP_AUTH__     __GSQL_TOKEN_SERVER_LIST__
+   __ENABLE_RESTPP_AUTH__ }
+
+    # Keep it for backward compatibility
+    server {
+        listen       __PORT_PER_RESTPP__ __GUI_CONNECTION_TYPE__;
+        server_name  localhost;
+
+        fastcgi_read_timeout 72000s;
+        fastcgi_send_timeout 72000s;
+
+        __SSL_CERT_ATTR__ __SSL_CERT_PATH__;  # if SSL is disabled, here should be '#'
+        __SSL_KEY_ATTR__ __SSL_KEY_PATH__;  # if SSL is disabled, here should be '#'
+        
+        location /kafka/ {
+			proxy_read_timeout 3600s;
+			proxy_set_header X-Real-IP $remote_addr;
+			proxy_pass http://localhost:5000/kafka/;
+		}
+
+        location / {
+           fastcgi_pass fastcgi_backend;
+           fastcgi_keep_conn on;
+           fastcgi_param REQUEST_METHOD  $request_method;
+           fastcgi_param CONTENT_TYPE    $content_type;
+           fastcgi_param CONTENT_LENGTH  $content_length;
+           fastcgi_param REQUEST_URI     $request_uri;
+           fastcgi_param GSQL_ASYNC      $http_gsql_async;
+           fastcgi_param GSQL_TIMEOUT    $http_gsql_timeout;
+           fastcgi_param RESPONSE_LIMIT  $http_response_limit;
+        }
+
+        # To ensure the performance of RESTPP, this rule shouldn't be enabled
+        # unless restpp.authentication is True.
+        # And for performance consideration,
+        #!!!!!!!   DO NOT USE REGULAR EXPRESSION HERE !!!!!!!
+        __ENABLE_RESTPP_AUTH__ location = /requesttoken {
+        __ENABLE_RESTPP_AUTH__      proxy_ssl_verify __PROXY_SSL_VERIFY__;
+        __ENABLE_RESTPP_AUTH__      proxy_set_header X-Real-IP $remote_addr;
+        __ENABLE_RESTPP_AUTH__      proxy_pass __REQUEST_TOKEN_PROTOCOL__://gsql_token_server;
+        __ENABLE_RESTPP_AUTH__ }
+    }
+
+    server {
+		listen __NGINX_SERVICES_PORT__ __GUI_CONNECTION_TYPE__;
+
+		__SSL_CERT_ATTR__ __SSL_CERT_PATH__;  # if SSL is disabled, here should be '#'
+		__SSL_KEY_ATTR__ __SSL_KEY_PATH__;  # if SSL is disabled, here should be '#'
+        
+
+      
+
+		location / {
+			# Set whether to enable compression
+			gzip on;
+			gzip_types
+				application/javascript  # works significantly with javascript files in GUI
+			;
+			root __GST_STATIC_FOLDER__;
+			try_files $uri $uri/ @backend;
+		}
+
+		location /assets/img/user-uploaded-icons/ {
+			alias __GUI_DATA_FOLDER__/user_icons/;
+			try_files $uri $uri/ = 404;
+		}
+
+		location /admin/ {
+			# Set whether to enable compression
+			gzip on;
+			gzip_types
+				application/javascript  # works significantly with javascript files in GUI
+			;
+			alias __ADMIN_PORTAL_STATIC_FOLDER__/;
+			try_files $uri $uri/ = 404;
+		}
+
+		location @backend {
+			proxy_read_timeout 3600s;
+			proxy_set_header X-Real-IP $remote_addr;
+			proxy_pass http://localhost:__GUI_WEBSERVER_PORT__;
+		}
+
+		location ~ ^/ts3/(?<ts3_uri>.*) {
+			proxy_read_timeout 3600s;
+			rewrite ^/ts3/(.*) /$ts3_uri break;
+			proxy_set_header X-Real-IP $remote_addr;
+			proxy_pass http://localhost:__TS3_REST_PORT__;
+		}
+
+		location ~ ^/gsqlserver/(?<gsql_uri>.*) {
+			rewrite ^/gsqlserver/(.*) /$gsql_uri break;
+			proxy_read_timeout 3600s;
+			proxy_set_header X-Real-IP $remote_addr;
+			proxy_pass http://localhost:__GSQL_SERVER_PORT__;
+			proxy_http_version 1.1;
+		}
+
+		# This RESTPP endpoint shares the same security configuration
+		fastcgi_read_timeout 7200s;
+		fastcgi_send_timeout 7200s;
+
+		location ~ ^/restpp/(.*) {
+			fastcgi_pass fastcgi_backend;
+			fastcgi_keep_conn on;
+			fastcgi_param REQUEST_METHOD  $request_method;
+			fastcgi_param CONTENT_TYPE    $content_type;
+			fastcgi_param CONTENT_LENGTH  $content_length;
+			fastcgi_param REQUEST_URI     $1?$query_string;  # the url pattern matched above
+			fastcgi_param GSQL_TIMEOUT    $http_gsql_timeout;
+			fastcgi_param RESPONSE_LIMIT  $http_response_limit;
+		}
+
+		__ENABLE_RESTPP_AUTH__ location ~ ^/restpp/(?<token_uri>requesttoken.*) {
+		__ENABLE_RESTPP_AUTH__      rewrite ^/restpp/(.*) /$token_uri break;
+		__ENABLE_RESTPP_AUTH__      proxy_ssl_verify __PROXY_SSL_VERIFY__;
+		__ENABLE_RESTPP_AUTH__      proxy_set_header X-Real-IP $remote_addr;
+		__ENABLE_RESTPP_AUTH__      proxy_pass __REQUEST_TOKEN_PROTOCOL__://gsql_token_server;
+		__ENABLE_RESTPP_AUTH__ }
+	}
+}
